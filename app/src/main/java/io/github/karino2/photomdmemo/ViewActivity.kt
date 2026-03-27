@@ -1,5 +1,6 @@
 package io.github.karino2.photomdmemo
 
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.webkit.WebResourceRequest
@@ -59,7 +60,7 @@ class ViewActivity : AppCompatActivity() {
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <style>
                     body { font-family: sans-serif; padding: 16px; line-height: 1.6; }
-                    img { max-width: 100%; height: auto; display: block; margin: 1em 0; }
+                    img { max-width: 100%; height: auto; display: block; margin: 1em 0; cursor: pointer; }
                 </style>
             </head>
             <body>$body</body>
@@ -69,6 +70,22 @@ class ViewActivity : AppCompatActivity() {
 
     private fun setupWebView() {
         webView.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                val url = request?.url ?: return false
+                if (url.host == "local.app") {
+                    val fileName = url.path?.removePrefix("/") ?: return false
+                    val file = parentDir.findFile(fileName)
+                    if (file != null) {
+                        val photoIntent = Intent(this@ViewActivity, PhotoViewActivity::class.java).apply {
+                            data = file.uri
+                        }
+                        startActivity(photoIntent)
+                        return true
+                    }
+                }
+                return super.shouldOverrideUrlLoading(view, request)
+            }
+
             override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
                 val url = request?.url ?: return null
                 if (url.host == "local.app") {
@@ -82,7 +99,21 @@ class ViewActivity : AppCompatActivity() {
                 }
                 return super.shouldInterceptRequest(view, request)
             }
+
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                // Add click listener to images via JS
+                view?.loadUrl("javascript:(function(){ " +
+                        "var imgs = document.getElementsByTagName('img'); " +
+                        "for (var i = 0; i < imgs.length; i++) {" +
+                        "  imgs[i].onclick = function() {" +
+                        "    window.location.href = this.src;" +
+                        "  };" +
+                        "}" +
+                        "})()")
+            }
         }
+        webView.settings.javaScriptEnabled = true
     }
 
     override fun onSupportNavigateUp(): Boolean {
